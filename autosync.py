@@ -1,6 +1,10 @@
+
+import shutil
 from repo_manager import add_new_solution
 from git_manager import push_to_github
-
+from llm_generator import generate_solution_post
+from config import LEETCODE_REPO_PATH
+import os
 
 def main():
     print("==== LeetCode AutoSync ====")
@@ -26,6 +30,7 @@ def main():
 
         solution_code = "\n".join(lines)
 
+        # Step 1: Add locally
         add_new_solution(
             problem_number,
             problem_name,
@@ -33,6 +38,57 @@ def main():
             link,
             solution_code
         )
+
+        # Step 2: Generate LLM content
+        print("Generating structured solution post using Gemini...")
+
+        structured_post = generate_solution_post(
+            problem_number,
+            problem_name,
+            difficulty,
+            link,
+            solution_code
+        )
+
+        
+
+        # Step 3: Prepare "copy paste this solution" folder
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+        copy_folder = os.path.join(BASE_DIR, "copy_paste_solution")
+
+        # If folder exists → clear it completely
+        if os.path.exists(copy_folder):
+            shutil.rmtree(copy_folder)
+
+        # Recreate fresh empty folder
+        os.makedirs(copy_folder)
+
+        # Generate clean filename
+        safe_problem_name = problem_name.replace(" ", "_")
+        structured_filename = f"structured_solution_{problem_number}_{safe_problem_name}.md"
+
+        structured_path = os.path.join(copy_folder, structured_filename)
+
+        # Save structured markdown
+        with open(structured_path, "w", encoding="utf-8") as f:
+            f.write(structured_post)
+
+        print("\n✅ Structured solution generated.")
+        print(f"📂 Saved at: {structured_path}")
+        print("👉 Folder was cleared and recreated.")
+        print("👉 Please copy and paste into LeetCode Solutions section.")
+        output_file = os.path.join(
+            copy_folder,
+            f"{problem_number}_{problem_name}_solution_post.md"
+        )
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(structured_post)
+
+        print("\n✅ Structured solution generated.")
+        print(f"📂 Saved at: {output_file}")
+        print("👉 Please copy and paste into LeetCode Solutions section.")
 
     elif choice == "2":
         push_to_github()
