@@ -51,7 +51,7 @@ def main():
         solution_code = "\n".join(lines)
 
         safe_problem_name = problem_name.replace(" ", "_")
-        filename = f"{problem_number}_{safe_problem_name}{extension}"
+        filename = f"{problem_number}_{safe_problem_name}.{extension}"
 
         add_new_solution(
             problem_number,
