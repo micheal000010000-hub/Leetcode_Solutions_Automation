@@ -433,6 +433,244 @@ Feel free to open a Pull Request.
 
 ---
 
+---
+
+# 🚀 Advanced Features & Internal Architecture
+
+This project is not just a LeetCode auto-uploader — it is a lightweight solution management system built with concurrency, automation, and intelligent file handling.
+
+Below is a detailed breakdown of all advanced features and how they work internally.
+
+---
+
+## ⚡ 1. Background LLM Generation (Non-Blocking)
+
+Structured solution posts are generated using a background worker thread.
+
+### 🔹 Problem Solved
+LLM generation is slow (network-bound / model-bound).  
+Previously, the program would block and wait for generation to finish before allowing new input.
+
+### 🔹 Solution
+A **Producer–Consumer architecture** using:
+
+- `threading.Thread`
+- `queue.Queue`
+- Background worker loop
+
+### 🔹 How It Works
+
+- Main thread → collects solution input
+- File is saved instantly
+- Task is added to `generation_queue`
+- Background worker picks tasks one by one
+- LLM generates structured markdown
+- Output saved in `copy_paste_solution/`
+- Notification beep when complete
+
+### 🔹 Architecture
+```
+Main Thread (User Input)
+│
+▼
+generation_queue
+│
+▼
+Worker Thread (LLM Generation)
+```
+
+This removes idle waiting time and allows continuous problem entry.
+
+---
+
+## 📦 2. Visual Queue System
+
+Users can view real-time queue status.
+
+### Shows:
+- Number of tasks waiting
+- Number currently being processed
+
+Example:
+```
+📊 Queue Status
+🕒 Waiting in queue: 2
+⚙ Currently processing: 1
+```
+
+This prevents confusion about background progress.
+
+---
+
+## 🛑 3. Safe Exit System (Graceful Shutdown)
+
+Exiting while tasks are running triggers a safety check.
+
+If queue is not empty:
+```
+⚠ There are 3 solution(s) still being processed.
+1 → Wait for completion
+2 → Force exit (remaining jobs will be lost)
+```
+
+### Internally Uses:
+- `threading.Event()` for shutdown signaling
+- `queue.join()` for graceful waiting
+- Lock-protected active task counter
+
+This ensures no accidental data loss.
+
+---
+
+## 📝 4. Intelligent README Auto-Sorting
+
+Every time a solution is added:
+
+- It is inserted under correct difficulty section
+- Duplicate entries are removed
+- Entries are sorted numerically by problem number
+
+Sorting is handled automatically using regex extraction and numeric comparison.
+
+No manual README maintenance required.
+
+---
+
+## 🌐 5. Multi-Language File Support
+
+Supports multiple programming languages dynamically.
+
+| Language | Extension |
+|----------|-----------|
+| Python   | `.py`     |
+| SQL      | `.sql`    |
+| C++      | `.cpp`    |
+| Java     | `.java`   |
+
+Language selection determines:
+
+- File extension
+- LLM code block formatting
+- Proper syntax highlighting
+
+Language is stored via file extension (not inside file metadata).
+
+---
+
+## ✏ 6. Edit Existing Solution (Repository Refactoring Tool)
+
+Existing solutions can be edited safely.
+
+You can modify:
+
+- Problem number
+- Problem name
+- Difficulty category
+- Link
+
+When edited, the system automatically:
+
+- Renames the file
+- Moves it to correct difficulty folder
+- Updates header metadata
+- Updates README entry
+- Re-sorts the section
+
+This prevents inconsistencies across:
+
+- Filename
+- Folder structure
+- README
+- Header metadata
+
+---
+
+## 🔔 7. Completion Notification System
+
+When LLM generation finishes:
+
+- Console confirmation is printed
+- Audible system beep is triggered (Windows)
+
+Example:
+```
+✅ DONE: 506 - Ready to copy 🚀
+```
+
+This allows multitasking while generation runs.
+
+---
+
+## 🧵 8. Threading & Concurrency Model
+
+This project uses a **Producer–Consumer model**.
+
+### Producer:
+Main thread (user input)
+
+### Consumer:
+Background worker thread (LLM generation)
+
+### Communication Layer:
+`queue.Queue()` ensures thread-safe task transfer.
+
+### Synchronization:
+- `threading.Lock()` protects shared counters
+- `threading.Event()` manages shutdown state
+
+This architecture is ideal for network-bound tasks such as API calls.
+
+---
+
+## 📁 9. Structured Output Management
+
+All generated structured posts are saved in:
+```
+copy_paste_solution/
+```
+
+- Folder auto-created if missing
+- Files named:
+```
+structured_solution_<number>_<name>.md
+```
+
+Designed for quick copy-paste into LeetCode's "Share Solution" section.
+
+---
+
+## 🔧 10. Modular Architecture
+
+The system is divided into:
+
+- `autosync.py` → CLI + concurrency controller
+- `repo_manager.py` → File + README management
+- `llm_generator.py` → LLM interaction
+- `git_manager.py` → Git operations
+- `config.py` → Environment configuration
+
+This separation ensures maintainability and scalability.
+
+---
+
+## 🎯 Summary of Capabilities
+
+- Add solutions instantly
+- Generate structured posts asynchronously
+- Multi-language support
+- Auto-sorted README
+- Safe exit with queue protection
+- Edit existing entries safely
+- Background notifications
+- Clean modular design
+
+---
+
+This project effectively acts as a lightweight LeetCode Content Management System (CMS) built using Python concurrency principles.
+
+
+
+
 # 📜 License
 
 This project is open for educational and personal use.

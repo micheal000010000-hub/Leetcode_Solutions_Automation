@@ -3,7 +3,7 @@ OLLAMA_URL = "http://localhost:11434/api/generate"  # Default Ollama endpoint
 OLLAMA_MODEL = "mistral"
 
 
-def generate_solution_post(problem_number, problem_name, difficulty, link, code):
+def generate_solution_post(problem_number, problem_name, difficulty, link, code, language):
     """
     Generates a structured LeetCode solution post using Mistral via Ollama.
     Returns formatted Markdown content as a string.
@@ -18,7 +18,7 @@ Name: {problem_name}
 Difficulty: {difficulty}
 Link: {link}
 
-Python 3 Solution:
+{language} Solution:
 {code}
 
 Instructions:
@@ -27,9 +27,9 @@ Instructions:
 - The title MUST mention:
     • The core technique used (e.g., HashMap, Sorting, Two Pointers, DP, Greedy, etc.)
     • The time complexity (Big-O notation)
-    • Python
-- Example style:
-    "O(n) HashMap-Based Python Solution | Clean and Simple Approach"
+- Here The code should not be changed at all
+- Here The details have to be mentioned based on the laguage asssociated with the code provided as Input
+- Never change the language of input code provided in the input based on that response have to be generated based on the laguage of the code provided in the input
 
 2. Generate structured Markdown sections:
 
@@ -44,12 +44,12 @@ Instructions:
 ## Code
 
 3. The Code section MUST be formatted exactly like:
-```python3
+```{language}
 {code}
 ```
 
 4. The content should be concise, clear, and professional, suitable for a high-quality LeetCode solution post."""
-
+        # print(f"Generated prompt for {language} command")
         response = requests.post(
             OLLAMA_URL,
             json={
@@ -61,11 +61,11 @@ Instructions:
             },
             timeout=600,
         )
-
         if response.status_code != 200:
             return f"⚠ Ollama returned status code {response.status_code}"
 
         response_data = response.json()
+        # print(f"Ollama response for {language} command is: {response_data}")
         generated_text = response_data.get("response", "").strip()
 
         if not generated_text:

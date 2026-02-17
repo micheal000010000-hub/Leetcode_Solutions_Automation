@@ -2,7 +2,7 @@ import shutil
 import threading
 import queue
 import os
-import winsound
+import winsound  # For notification beep (Windows)
 
 from repo_manager import add_new_solution
 from git_manager import push_to_github
@@ -10,26 +10,16 @@ from llm_generator import generate_solution_post
 from config import LEETCODE_REPO_PATH
 
 
+# 🔹 Background queue
 generation_queue = queue.Queue()
-active_lock = threading.Lock()
-active_tasks = 0
-shutdown_event = threading.Event()
 
 
 def background_worker():
-    global active_tasks
-
-    while not shutdown_event.is_set():
-        try:
-            task = generation_queue.get(timeout=1)
-        except queue.Empty:
-            continue
+    while True:
+        task = generation_queue.get()
 
         if task is None:
             break
-
-        with active_lock:
-            active_tasks += 1
 
         (
             problem_number,
@@ -53,6 +43,8 @@ def background_worker():
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         copy_folder = os.path.join(BASE_DIR, "copy_paste_solution")
+
+        # Do NOT clear folder every time anymore
         os.makedirs(copy_folder, exist_ok=True)
 
         safe_problem_name = problem_name.replace(" ", "_")
@@ -68,51 +60,17 @@ def background_worker():
         print(f"\n✅ DONE: {problem_number} - Ready to copy 🚀")
         print(f"📂 Saved at: {structured_path}")
 
+        # 🔔 Notification sound
         try:
-            winsound.Beep(1000, 400)
+            winsound.Beep(1000, 500)
         except:
             pass
 
         generation_queue.task_done()
 
-        with active_lock:
-            active_tasks -= 1
-
-
-def show_queue_status():
-    with active_lock:
-        print("\n📊 Queue Status")
-        print(f"🕒 Waiting in queue: {generation_queue.qsize()}")
-        print(f"⚙ Currently processing: {active_tasks}")
-
-
-def safe_exit():
-    with active_lock:
-        remaining = generation_queue.qsize() + active_tasks
-
-    if remaining > 0:
-        print(f"\n⚠ There are {remaining} solution(s) still being processed.")
-        print("1 → Wait for completion")
-        print("2 → Force exit (remaining jobs will be lost)")
-
-        decision = input("Choose option: ").strip()
-
-        if decision == "1":
-            print("\n⏳ Waiting for all tasks to complete...")
-            generation_queue.join()
-            print("✅ All tasks completed. Exiting safely.")
-        elif decision == "2":
-            print("⚠ Force exiting. Remaining tasks will be lost.")
-        else:
-            print("Invalid option. Returning to menu.")
-            return False
-
-    shutdown_event.set()
-    generation_queue.put(None)
-    return True
-
 
 def main():
+    # 🔹 Start background worker
     worker_thread = threading.Thread(target=background_worker, daemon=True)
     worker_thread.start()
 
@@ -127,13 +85,12 @@ def main():
         print("\n==== LeetCode AutoSync ====")
         print("1 → Add new solution locally")
         print("2 → Push existing changes to GitHub")
-        print("3 → Show queue status")
-        print("4 → Edit existing solution")
-        print("5 → Exit")
+        print("3 → Exit (Exit has yto be selected to stop the background worker thread gracefully)")
 
         choice = input("Select option: ").strip()
 
         if choice == "1":
+
             problem_number = input("Problem number: ").strip()
             problem_name = input("Problem name: ").strip()
             difficulty = input("Difficulty (easy/medium/hard): ").strip()
@@ -167,6 +124,7 @@ def main():
             safe_problem_name = problem_name.replace(" ", "_")
             filename = f"{problem_number}_{safe_problem_name}.{extension}"
 
+            # 🔹 Instant local add
             add_new_solution(
                 problem_number,
                 problem_name,
@@ -176,6 +134,7 @@ def main():
                 filename,
             )
 
+            # 🔹 Push to background queue
             generation_queue.put(
                 (
                     problem_number,
@@ -187,22 +146,20 @@ def main():
                 )
             )
 
-            print(f"\n📥 Added {problem_number} to queue.")
-            show_queue_status()
+            print(
+                f"\n📥 {problem_number} added to background generation queue."
+            )
+            print(
+                f"🕒 Current queue size: {generation_queue.qsize()}"
+            )
 
         elif choice == "2":
             push_to_github()
 
         elif choice == "3":
-            show_queue_status()
-
-        elif choice == "4":
-            from repo_manager import edit_solution
-            edit_solution()
-
-        elif choice == "5":
-            if safe_exit():
-                break
+            print("Exiting...")
+            generation_queue.put(None)
+            break
 
         else:
             print("Invalid option selected.")
