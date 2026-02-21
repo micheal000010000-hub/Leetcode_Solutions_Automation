@@ -1,6 +1,8 @@
+from config import GITHUB_REPO_URL
 import requests
 OLLAMA_URL = "http://localhost:11434/api/generate"  # Default Ollama endpoint
 OLLAMA_MODEL = "mistral"
+
 
 
 def generate_solution_post(problem_number, problem_name, difficulty, link, code, language):
@@ -46,6 +48,8 @@ Instructions:
 3. The Code section MUST be formatted exactly like:
 ```{language}
 {code}
+
+
 ```
 
 4. The content should be concise, clear, and professional, suitable for a high-quality LeetCode solution post."""
@@ -67,6 +71,11 @@ Instructions:
         response_data = response.json()
         # print(f"Ollama response for {language} command is: {response_data}")
         generated_text = response_data.get("response", "").strip()
+        if GITHUB_REPO_URL:
+            generated_text += (
+                "\n\n---\n"
+                f"🔗 **GitHub Repository:** {GITHUB_REPO_URL}\n"
+            )
 
         if not generated_text:
             return "⚠ Mistral returned empty response."

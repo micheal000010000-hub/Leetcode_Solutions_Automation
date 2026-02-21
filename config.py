@@ -1,11 +1,11 @@
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 
 LEETCODE_REPO_PATH = os.getenv("LEETCODE_REPO_PATH")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GITHUB_REPO_URL = os.getenv("GITHUB_REPO_URL", "")
 
 if not LEETCODE_REPO_PATH:
     raise ValueError("LEETCODE_REPO_PATH not set")

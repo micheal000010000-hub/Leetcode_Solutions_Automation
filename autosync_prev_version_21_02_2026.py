@@ -1,9 +1,8 @@
+import shutil
 import threading
 import queue
 import os
 import winsound
-import subprocess
-import time
 
 from repo_manager import add_new_solution
 from git_manager import push_to_github
@@ -11,36 +10,15 @@ from llm_generator import generate_solution_post
 from config import LEETCODE_REPO_PATH
 
 
-# ===============================
-# Global State
-# ===============================
-
 generation_queue = queue.Queue()
 active_lock = threading.Lock()
 active_tasks = 0
 shutdown_event = threading.Event()
+auto_exit_requested = False
 
 notification_messages = []
 notification_lock = threading.Lock()
 
-MODEL_NAME = "mistral:latest"
-
-
-# ===============================
-# Ollama Stop Function
-# ===============================
-
-def stop_ollama():
-    try:
-        print("🛑 Stopping Ollama model...")
-        subprocess.run(["ollama", "stop", MODEL_NAME], capture_output=True)
-    except Exception as e:
-        print(f"⚠ Could not stop Ollama cleanly: {e}")
-
-
-# ===============================
-# Background Worker
-# ===============================
 
 def background_worker():
     global active_tasks
@@ -63,11 +41,11 @@ def background_worker():
             language_name,
         ) = task
 
-        # Increment active safely
+        # ✅ increment safely
         with active_lock:
             active_tasks += 1
 
-        # Generate (outside lock)
+        # 🚀 generate OUTSIDE lock (important)
         structured_post = generate_solution_post(
             problem_number,
             problem_name,
@@ -91,40 +69,61 @@ def background_worker():
         with open(structured_path, "w", encoding="utf-8") as f:
             f.write(structured_post)
 
-        # Buffer notification (no worker printing!)
+        # ✅ buffer notification instead of printing
         with notification_lock:
             notification_messages.append(
                 f"✅ DONE: {problem_number} - Saved at {structured_path}"
             )
 
+        # optional beep (safe)
         try:
-            winsound.Beep(1000, 300)
+            winsound.Beep(1000, 400)
         except:
             pass
 
         generation_queue.task_done()
 
+        # ✅ decrement safely
         with active_lock:
             active_tasks -= 1
 
 
-# ===============================
-# Queue Status
-# ===============================
-
 def show_queue_status():
     with active_lock:
         print("\n📊 Queue Status")
-        print(f"🕒 Waiting: {generation_queue.qsize()}")
-        print(f"⚙ Processing: {active_tasks}")
+        print(f"🕒 Waiting in queue: {generation_queue.qsize()}")
+        print(f"⚙ Currently processing: {active_tasks}")
 
 
-# ===============================
-# Main CLI
-# ===============================
+def safe_exit():
+    with active_lock:
+        remaining = generation_queue.qsize() + active_tasks
+
+    if remaining > 0:
+        print(f"\n⚠ There are {remaining} solution(s) still being processed.")
+        print("1 → Wait for completion")
+        print("2 → Force exit (remaining jobs will be lost)")
+
+        decision = input("Choose option: ").strip()
+
+        if decision == "1":
+            print("\n⏳ Waiting for all tasks to complete...")
+            generation_queue.join()
+            print("✅ All tasks completed. Exiting safely.")
+        elif decision == "2":
+            print("⚠ Force exiting. Remaining tasks will be lost.")
+        else:
+            print("Invalid option. Returning to menu.")
+            return False
+
+    shutdown_event.set()
+    generation_queue.put(None)
+    return True
+
 
 def main():
-    worker_thread = threading.Thread(target=background_worker)
+    global auto_exit_requested
+    worker_thread = threading.Thread(target=background_worker, daemon=True)
     worker_thread.start()
 
     LANGUAGE_MAP = {
@@ -136,7 +135,19 @@ def main():
 
     while True:
 
-        # Show buffered notifications safely
+        # 🚀 AUTO EXIT CHECK
+        if auto_exit_requested:
+            with active_lock:
+                remaining = generation_queue.qsize() + active_tasks
+
+            if remaining == 0:
+                print("\n✅ Queue empty. Auto-exiting.")
+                shutdown_event.set()
+                generation_queue.put(None)
+                break
+
+
+        # 🔔 SAFE notification display (ONLY main thread prints)
         with notification_lock:
             if notification_messages:
                 print("\n🔔 Completed Tasks:")
@@ -149,13 +160,10 @@ def main():
         print("2 → Push existing changes to GitHub")
         print("3 → Show queue status")
         print("4 → Edit existing solution")
-        print("5 → Exit (wait for queue & stop Ollama)")
+        print("5 → Exit")
 
         choice = input("Select option: ").strip()
 
-        # ===============================
-        # ADD SOLUTION
-        # ===============================
         if choice == "1":
             problem_number = input("Problem number: ").strip()
             problem_name = input("Problem name: ").strip()
@@ -213,48 +221,33 @@ def main():
             print(f"\n📥 Added {problem_number} to queue.")
             show_queue_status()
 
-        # ===============================
-        # PUSH TO GITHUB
-        # ===============================
         elif choice == "2":
             push_to_github()
 
-        # ===============================
-        # SHOW STATUS
-        # ===============================
         elif choice == "3":
             show_queue_status()
 
-        # ===============================
-        # EDIT
-        # ===============================
         elif choice == "4":
             from repo_manager import edit_solution
             edit_solution()
 
-        # ===============================
-        # EXIT (WAIT + STOP MODEL)
-        # ===============================
         elif choice == "5":
+            auto_exit_requested = True
             print("\n⏳ Waiting for queue to finish...")
 
+            # 🔥 WAIT LOOP (this was missing)
             while True:
                 with active_lock:
                     remaining = generation_queue.qsize() + active_tasks
 
                 if remaining == 0:
-                    print("✅ Queue empty.")
-
+                    print("✅ Queue empty. Auto-exiting.")
                     shutdown_event.set()
                     generation_queue.put(None)
+                    return  # <-- IMPORTANT: exit main completely
 
-                    worker_thread.join(timeout=5)
-
-                    stop_ollama()
-
-                    print("👋 AutoSync exiting cleanly.")
-                    return
-
+                # small sleep prevents CPU burn
+                import time
                 time.sleep(0.5)
 
         else:
