@@ -144,13 +144,11 @@ def generate_solution_post(problem_number, problem_name, difficulty, link, code,
         response_tokens = response_data.get("eval_count")
         total_duration = response_data.get("total_duration")
 
-        # 🔥 Log to Excel
+        # 🔥 Log full response data to Excel
         log_token_usage(
             problem_number,
             problem_name,
-            prompt_tokens,
-            response_tokens,
-            total_duration,
+            response_data
         )
 
         if GITHUB_REPO_URL:
