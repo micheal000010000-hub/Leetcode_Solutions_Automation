@@ -125,9 +125,9 @@ def render_generate_tab() -> None:
 
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
-            submitted = st.form_submit_button("Generate Structured Post", use_container_width=True)
+            submitted = st.form_submit_button("Generate Structured Post", width="stretch")
         with btn_col2:
-            add_to_queue = st.form_submit_button("+ Add to Queue", type="secondary", use_container_width=True)
+            add_to_queue = st.form_submit_button("+ Add to Queue", type="secondary", width="stretch")
 
     if submitted:
         if not all([problem_number.strip(), problem_name.strip(), link.strip(), solution_code.strip()]):
@@ -296,7 +296,7 @@ def render_generate_tab() -> None:
             }
             for i, item in enumerate(queue)
         ]
-        st.dataframe(pd.DataFrame(queue_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(queue_rows), width="stretch")
 
         pending_count = sum(1 for item in queue if item["status"] == "pending")
         done_count = sum(1 for item in queue if item["status"] == "done")
@@ -659,7 +659,12 @@ def render_copy_solutions_tab() -> None:
         st.info("No copy_paste_solution folder found yet. Generate a solution first.")
         return
 
-    files = sorted(glob.glob(os.path.join(copy_dir, "*.md")))
+    # Show most recently generated markdown files first for faster lookup in the selector.
+    files = sorted(
+        glob.glob(os.path.join(copy_dir, "*.md")),
+        key=os.path.getmtime,
+        reverse=True,
+    )
     if not files:
         st.info("No generated solutions found yet. Use Generate or the Queue to create some.")
         return
@@ -686,7 +691,7 @@ def render_copy_solutions_tab() -> None:
     # Navigation row
     nav_prev, nav_counter, nav_next = st.columns([1, 3, 1])
     with nav_prev:
-        if st.button("← Prev", disabled=idx == 0, use_container_width=True):
+        if st.button("← Prev", disabled=idx == 0, width="stretch"):
             st.session_state["copy_solutions_index"] -= 1
             st.rerun()
     with nav_counter:
@@ -695,7 +700,7 @@ def render_copy_solutions_tab() -> None:
             unsafe_allow_html=True,
         )
     with nav_next:
-        if st.button("Next →", disabled=idx == len(files) - 1, use_container_width=True):
+        if st.button("Next →", disabled=idx == len(files) - 1, width="stretch"):
             st.session_state["copy_solutions_index"] += 1
             st.rerun()
 
