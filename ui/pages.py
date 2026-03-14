@@ -1,4 +1,3 @@
-import concurrent.futures
 import glob
 import os
 from datetime import datetime
@@ -103,7 +102,7 @@ def render_generate_tab() -> None:
     else:
         st.error(f"Local LLM status: Not reachable. {llm_health.get('message', '')}")
 
-    with st.form("generate_form"):
+    with st.form("generate_form", clear_on_submit=True):
         left, right = st.columns(2)
 
         with left:
@@ -272,6 +271,7 @@ def render_generate_tab() -> None:
                 "status": "pending",
                 "result": None,
             })
+            st.session_state["auto_process_queue_now"] = True
             st.success(f"Added #{problem_number.strip()} — {problem_name.strip()} to queue ({len(st.session_state['solution_queue'])} total).")
             add_activity_event(
                 action="Added to queue",
@@ -314,31 +314,31 @@ def render_generate_tab() -> None:
         with q_col2:
             clear_queue = st.button("Clear Queue", key="clear_queue_btn")
 
+        auto_process_queue = st.session_state.pop("auto_process_queue_now", False)
+
         if clear_queue:
             st.session_state["solution_queue"] = []
             st.rerun()
 
-        if process_queue:
-            pending_items = [item for item in queue if item["status"] == "pending"]
-            batch_progress = st.progress(0, text=f"Processing 0 / {len(pending_items)}...")
-            completed_count = 0
+        if process_queue or (auto_process_queue and pending_count > 0):
+            pending_entries = [
+                (idx, item) for idx, item in enumerate(queue) if item["status"] == "pending"
+            ]
+            batch_progress = st.progress(0, text=f"Processing 0 / {len(pending_entries)}...")
             results: list = []
 
-            max_workers = min(len(pending_items), 3)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_map = {executor.submit(_process_single_queue_item, item): item for item in pending_items}
-                for future in concurrent.futures.as_completed(future_map):
-                    completed_count += 1
-                    pct = int((completed_count / len(pending_items)) * 100)
-                    batch_progress.progress(pct, text=f"Processing {completed_count} / {len(pending_items)}...")
-                    results.append(future.result())
+            for completed_count, (queue_index, item) in enumerate(pending_entries, start=1):
+                result = _process_single_queue_item(item)
+                queue[queue_index] = result
+                results.append(result)
 
-            result_map = {(r["problem_number"], r["problem_name"]): r for r in results}
-            updated_queue = []
-            for item in queue:
-                key = (item["problem_number"], item["problem_name"])
-                updated_queue.append(result_map.get(key, item))
-            st.session_state["solution_queue"] = updated_queue
+                pct = int((completed_count / len(pending_entries)) * 100)
+                batch_progress.progress(
+                    pct,
+                    text=f"Processing {completed_count} / {len(pending_entries)}...",
+                )
+
+            st.session_state["solution_queue"] = queue
 
             success_count = sum(1 for r in results if r["status"] == "done")
             fail_count = sum(1 for r in results if r["status"] == "error")
